@@ -65,5 +65,16 @@ See `src/agent.cr` for the canonical schema.
 ## Experiments
 See `EXPERIMENTS.md`.
 
+## Analysis (plot inter-arrival timing)
+If you want a quick visualization of how jitter changes timing distributions:
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r analysis/requirements.txt
+python analysis/plot_interarrival.py --base-url http://127.0.0.1:8080 --agent-id <agent_id> --limit 500
+```
+
+This writes a PNG under `out/`.
+
 ## License
 MIT
