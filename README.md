@@ -1,6 +1,6 @@
 # crystal-beacon-lab
 
-## For grad-school reviewers (what this demonstrates)
+## For reviewers (academic summary)
 **crystal-beacon-lab** is an **engineering-focused lab**: it demonstrates how to design and implement a safe **agent → collector telemetry pipeline** (client instrumentation, structured payloads, and a minimal ingest service).
 
 **Primary outcomes:**
