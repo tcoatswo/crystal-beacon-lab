@@ -14,8 +14,8 @@ app = Flask(__name__)
 HOST = os.environ.get("HOST", "127.0.0.1")
 PORT = int(os.environ.get("PORT", "8080"))
 DB_PATH = os.environ.get("DB_PATH", os.path.join(os.path.dirname(__file__), "beacons.sqlite"))
-BEACON_KEY = os.environ.get("BEACON_KEY")  # optional shared secret
-REPLAY_WINDOW_SECONDS = int(os.environ.get("REPLAY_WINDOW_SECONDS", "600"))  # 10m default
+REPLAY_WINDOW_SECONDS_DEFAULT = 600
+
 
 SCHEMA_VERSION = 1
 
@@ -99,13 +99,18 @@ def validate_payload(data: Dict[str, Any]) -> ValidationResult:
 
 
 def auth_check() -> Optional[str]:
-    """Return error string if auth fails; else None."""
-    if not BEACON_KEY:
+    """Return error string if auth fails; else None.
+
+    Note: we read env vars at request-time so tests and local runs can toggle
+    BEACON_KEY without relying on module reload behavior.
+    """
+    beacon_key = os.environ.get("BEACON_KEY")
+    if not beacon_key:
         return None
     provided = request.headers.get("X-Beacon-Key")
     if not provided:
         return "missing X-Beacon-Key"
-    if provided != BEACON_KEY:
+    if provided != beacon_key:
         return "invalid X-Beacon-Key"
     return None
 
@@ -116,9 +121,11 @@ def replay_check(sent_at: Optional[str]) -> Optional[str]:
     dt = parse_rfc3339(sent_at)
     if not dt:
         return "invalid sent_at"
+
+    replay_window = int(os.environ.get("REPLAY_WINDOW_SECONDS", str(REPLAY_WINDOW_SECONDS_DEFAULT)))
     age = abs((utcnow() - dt).total_seconds())
-    if age > REPLAY_WINDOW_SECONDS:
-        return f"sent_at outside replay window ({REPLAY_WINDOW_SECONDS}s)"
+    if age > replay_window:
+        return f"sent_at outside replay window ({replay_window}s)"
     return None
 
 
