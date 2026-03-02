@@ -39,13 +39,15 @@ end
 
 url = ""
 interval = 15
+jitter = 0
 agent_id = UUID.random.to_s[0, 8]
 
 OptionParser.parse do |parser|
-  parser.banner = "Usage: crystal-beacon [--url URL] [--interval SECONDS] [--agent-id ID]"
+  parser.banner = "Usage: crystal-beacon [--url URL] [--interval SECONDS] [--jitter SECONDS] [--agent-id ID]"
 
   parser.on("--url URL", "Collector endpoint (e.g., http://127.0.0.1:8080/ingest)") { |v| url = v }
   parser.on("--interval SECONDS", "Send interval in seconds (default: 15)") { |v| interval = v.to_i }
+  parser.on("--jitter SECONDS", "Add uniform random jitter +/- SECONDS to sleep interval (default: 0)") { |v| jitter = v.to_i }
   parser.on("--agent-id ID", "Optional stable agent id") { |v| agent_id = v }
   parser.on("-h", "--help", "Show help") do
     puts parser
@@ -58,7 +60,17 @@ if url.empty?
   exit 2
 end
 
-puts "agent_id=#{agent_id} interval=#{interval}s url=#{url}"
+if interval <= 0
+  STDERR.puts "ERROR: --interval must be > 0"
+  exit 2
+end
+
+if jitter < 0
+  STDERR.puts "ERROR: --jitter must be >= 0"
+  exit 2
+end
+
+puts "agent_id=#{agent_id} interval=#{interval}s jitter=+/-#{jitter}s url=#{url}"
 
 loop do
   payload = Payload.new(agent_id)
@@ -76,5 +88,15 @@ loop do
     STDERR.puts "request_failed=#{ex.message}"
   end
 
-  sleep interval.seconds
+  sleep_seconds = interval
+
+  if jitter > 0
+    # Uniform integer jitter in [-jitter, +jitter]
+    delta = Random.rand((-jitter)..jitter)
+    sleep_seconds = interval + delta
+  end
+
+  # Clamp to at least 1s to avoid accidental hammering
+  sleep_seconds = 1 if sleep_seconds < 1
+  sleep sleep_seconds.seconds
 end

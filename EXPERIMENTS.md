@@ -4,7 +4,7 @@ This repo is intentionally small; the point is to enable quick measurement loops
 
 ## 1) Timing regularity vs jitter
 - Baseline: fixed interval (e.g., 15s)
-- Variant: interval + uniform jitter (e.g., ±3s)
+- Variant: interval + uniform jitter (e.g., ±3s) using `--jitter`
 
 Questions:
 - How much jitter is required before a simple periodicity detector fails?

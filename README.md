@@ -57,7 +57,8 @@ You’ll need Crystal installed.
 # from repo root
 crystal run src/agent.cr -- \
   --url http://127.0.0.1:8080/ingest \
-  --interval 15
+  --interval 15 \
+  --jitter 3
 ```
 
 You should see:
