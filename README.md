@@ -1,5 +1,19 @@
 # crystal-beacon-lab
 
+## For grad-school reviewers (what this demonstrates)
+**crystal-beacon-lab** is an **engineering-focused lab**: it demonstrates how to design and implement a safe **agent → collector telemetry pipeline** (client instrumentation, structured payloads, and a minimal ingest service).
+
+**Primary outcomes:**
+- Systems-oriented implementation in **Crystal** (CLI design, configuration, builds)
+- **Structured telemetry** (JSON payload design suitable for downstream analysis)
+- Reproducible local development loop (optional collector server)
+
+**Safety boundary:** This repo intentionally includes **no persistence** and **no remote tasking/command execution**.
+
+**Related (defender/policy capstone) repo:** For detections (Sigma/osquery), benign validation, and policy artifacts derived from “beacon-style” behaviors, see **beacon-to-blue**: https://github.com/tcoatswo/beacon-to-blue
+
+---
+
 A **safe, educational** Crystal project that demonstrates how to build a small “agent → collector” pipeline:
 
 - a Crystal CLI that periodically sends **telemetry** (host metadata) to an HTTP endpoint
