@@ -32,8 +32,6 @@ This project intentionally does **not** implement:
 - covert communications / “evasion”
 - memory-only execution / shell tasking / arbitrary code execution
 
-If you’re applying to a security program, these non-goals are a feature: the repo stays ethical, publishable, and reviewable.
-
 ## Quickstart
 
 ### 1) Build
