@@ -1,0 +1,18 @@
+services:
+  collector:
+    build:
+      context: ./server
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8080
+      DB_PATH: /data/beacons.sqlite
+      # Optional auth:
+      # BEACON_KEY: change-me
+      # REPLAY_WINDOW_SECONDS: 600
+    ports:
+      - "8080:8080"
+    volumes:
+      - beacon_data:/data
+
+volumes:
+  beacon_data:

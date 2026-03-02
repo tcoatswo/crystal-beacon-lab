@@ -19,9 +19,11 @@ Questions:
 - Which are likely to create false positives in enterprise telemetry?
 
 ## 3) Collector hardening
-- Add schema validation
-- Add auth (shared secret)
-- Add rate limiting
+- Enable auth: set `BEACON_KEY` and require `X-Beacon-Key`
+- Tune replay window: `REPLAY_WINDOW_SECONDS`
 
 Question:
 - What does “safe telemetry” look like when you treat it like a real service?
+
+## 4) Basic statistics
+Use `/stats` to observe inter-arrival summaries and see how jitter impacts distributions.

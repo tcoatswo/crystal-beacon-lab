@@ -4,18 +4,9 @@ A small lab for studying **periodic telemetry (“beacon”) patterns** in a saf
 
 The repo contains:
 - a tiny **Crystal agent** that periodically POSTs a minimal JSON payload to a collector
-- a tiny **Flask collector** that receives and echoes that payload
+- a **Flask collector** that stores events (SQLite) and exposes lightweight analysis endpoints
 
 The emphasis is on **observability, reproducibility, and detection-thinking**—not exploitation.
-
-## Why this exists
-Periodic traffic isn’t inherently malicious; plenty of legitimate software “beacons.” But defenders still need to reason about:
-- timing regularity / jitter
-- payload stability vs drift
-- what fields are actually useful for attribution
-- how quickly a detection trips vs false positives
-
-This lab gives you a clean signal you can measure, perturb, and build detections around.
 
 ## Safety / non-goals
 - No exploitation
@@ -27,49 +18,52 @@ It’s a telemetry toy designed for blue-team learning.
 
 ## Architecture
 ```
-[crystal agent]  --(HTTP POST /ingest every N seconds)-->  [local flask collector]
+[crystal agent]  --(HTTP POST /ingest every N seconds)-->  [flask collector]  ->  [SQLite]
 ```
 
-## Data model (current)
-The agent sends JSON shaped like:
-- `agent_id` (random by default)
-- `sent_at` (UTC timestamp)
-- `host` (basic host metadata: user/hostname/os/cpu_count)
+## Quick start (recommended: Docker Compose)
 
-See `src/agent.cr` for the canonical schema.
-
-## Quick start
-
-### 1) Run the collector
 ```bash
-cd server
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python app.py
-# listening on http://127.0.0.1:8080/ingest
+docker compose up --build
+# collector at http://127.0.0.1:8080/
 ```
 
-### 2) Run the agent
-You’ll need Crystal installed.
+Then run the agent locally (requires Crystal):
 
 ```bash
-# from repo root
 crystal run src/agent.cr -- \
   --url http://127.0.0.1:8080/ingest \
   --interval 15 \
-  --jitter 3
+  --jitter 3 \
+  --tag env=lab
 ```
 
-You should see:
-- the agent printing `sent_at=... status=200`
-- the collector responding with `ok: true` and echoing the payload
+## Collector endpoints
+- `GET /` — tiny dashboard (loads `/stats`)
+- `GET /health`
+- `POST /ingest` — store an event
+- `GET /events?agent_id=...&limit=...&since=...&until=...`
+- `GET /stats` — per-agent counts + inter-arrival summaries
 
-## Experiments to try
-- **Interval changes:** vary `--interval` and measure detection latency.
-- **Jitter:** add random jitter to interval and observe how “beacon-like” it still appears.
-- **Schema validation:** add strict JSON schema validation server-side.
-- **Auth:** add a shared secret header to simulate authenticated telemetry.
+### Optional auth
+Set `BEACON_KEY` on the collector to require the header `X-Beacon-Key`.
+The agent will automatically send `X-Beacon-Key` if `BEACON_KEY` is set in its environment.
+
+## Data model (current)
+The agent sends JSON with:
+- `schema_version`
+- `agent_version`
+- `agent_id`
+- `sent_at` (UTC)
+- `nonce`
+- `tags` (key/value)
+- `user_agent`
+- `host` (basic host metadata)
+
+See `src/agent.cr` for the canonical schema.
+
+## Experiments
+See `EXPERIMENTS.md`.
 
 ## License
 MIT

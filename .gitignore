@@ -3,3 +3,4 @@ crystal-beacon
 .venv/
 __pycache__/
 *.pyc
+server/beacons.sqlite
