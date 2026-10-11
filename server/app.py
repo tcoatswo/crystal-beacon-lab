@@ -1,15 +1,19 @@
 from __future__ import annotations
 
+import hmac
 import json
 import os
+import re
 import sqlite3
+import statistics
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, render_template, request
 
 app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = 16_384
 
 HOST = os.environ.get("HOST", "127.0.0.1")
 PORT = int(os.environ.get("PORT", "8080"))
@@ -26,7 +30,9 @@ def utcnow() -> datetime:
 
 def parse_rfc3339(ts: str) -> Optional[datetime]:
     """Parse timestamps like 2026-03-02T01:23:45Z."""
-    if not ts or not isinstance(ts, str):
+    if not isinstance(ts, str) or not re.fullmatch(
+        r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})", ts
+    ):
         return None
     try:
         if ts.endswith("Z"):
@@ -75,12 +81,12 @@ def validate_payload(data: Dict[str, Any]) -> ValidationResult:
         return ValidationResult(False, "payload must be a JSON object")
 
     agent_id = data.get("agent_id")
-    if not agent_id or not isinstance(agent_id, str):
-        return ValidationResult(False, "agent_id is required")
+    if not isinstance(agent_id, str) or not agent_id.strip() or len(agent_id) > 128:
+        return ValidationResult(False, "agent_id must be a nonempty string of at most 128 characters")
 
     sv = data.get("schema_version", SCHEMA_VERSION)
-    if not isinstance(sv, int):
-        return ValidationResult(False, "schema_version must be an integer")
+    if type(sv) is not int or sv != SCHEMA_VERSION:
+        return ValidationResult(False, f"schema_version must be {SCHEMA_VERSION}")
 
     # Basic shape checks (lab-grade; intentionally light)
     host = data.get("host")
@@ -110,7 +116,7 @@ def auth_check() -> Optional[str]:
     provided = request.headers.get("X-Beacon-Key")
     if not provided:
         return "missing X-Beacon-Key"
-    if provided != beacon_key:
+    if not hmac.compare_digest(provided, beacon_key):
         return "invalid X-Beacon-Key"
     return None
 
@@ -136,13 +142,15 @@ def health():
 
 @app.post("/ingest")
 def ingest():
-    init_db()
-
     auth_err = auth_check()
     if auth_err:
         return jsonify({"ok": False, "error": auth_err}), 401
 
-    data = request.get_json(force=True, silent=True) or {}
+    if not request.is_json:
+        return jsonify({"ok": False, "error": "Content-Type must be application/json"}), 415
+    if request.content_length is not None and request.content_length > 16_384:
+        return jsonify({"ok": False, "error": "payload exceeds 16 KiB"}), 413
+    data = request.get_json(silent=True)
     vr = validate_payload(data)
     if not vr.ok:
         return jsonify({"ok": False, "error": vr.error}), 400
@@ -150,6 +158,8 @@ def ingest():
     replay_err = replay_check(data.get("sent_at"))
     if replay_err:
         return jsonify({"ok": False, "error": replay_err}), 400
+
+    init_db()
 
     received_at = utcnow().isoformat().replace("+00:00", "Z")
     agent_id = data.get("agent_id")
@@ -180,11 +190,21 @@ def events():
     init_db()
 
     agent_id = request.args.get("agent_id")
-    limit = int(request.args.get("limit", "100"))
-    limit = max(1, min(limit, 1000))
+    try:
+        limit = int(request.args.get("limit", "100"))
+    except ValueError:
+        return jsonify({"ok": False, "error": "limit must be an integer"}), 400
+    if not 1 <= limit <= 1000:
+        return jsonify({"ok": False, "error": "limit must be between 1 and 1000"}), 400
 
-    since = parse_rfc3339(request.args.get("since", "") or "")
-    until = parse_rfc3339(request.args.get("until", "") or "")
+    since_raw = request.args.get("since")
+    until_raw = request.args.get("until")
+    since = parse_rfc3339(since_raw) if since_raw else None
+    until = parse_rfc3339(until_raw) if until_raw else None
+    if (since_raw and not since) or (until_raw and not until):
+        return jsonify({"ok": False, "error": "since and until must be RFC3339 timestamps"}), 400
+    if since and until and since > until:
+        return jsonify({"ok": False, "error": "since must be before until"}), 400
 
     clauses = []
     params: List[Any] = []
@@ -226,16 +246,21 @@ def events():
 
 def interarrival_stats(times: List[datetime]) -> Dict[str, Any]:
     if len(times) < 2:
-        return {"count": len(times), "min_s": None, "mean_s": None, "max_s": None}
+        return {"count": len(times), "min_s": None, "mean_s": None, "median_s": None, "max_s": None, "stdev_s": None, "cv": None}
 
     # sort ascending
     times = sorted(times)
     diffs = [(times[i] - times[i - 1]).total_seconds() for i in range(1, len(times))]
+    mean = statistics.mean(diffs)
+    stdev = statistics.pstdev(diffs)
     return {
         "count": len(times),
         "min_s": min(diffs),
-        "mean_s": sum(diffs) / len(diffs),
+        "mean_s": mean,
+        "median_s": statistics.median(diffs),
         "max_s": max(diffs),
+        "stdev_s": stdev,
+        "cv": stdev / mean if mean else None,
     }
 
 
@@ -253,7 +278,7 @@ def stats():
         agent_id = a["agent_id"]
         with db() as con:
             rows = con.execute(
-                "SELECT received_at FROM events WHERE agent_id = ? ORDER BY id ASC LIMIT 2000", (agent_id,)
+                "SELECT received_at FROM events WHERE agent_id = ? ORDER BY id DESC LIMIT 2000", (agent_id,)
             ).fetchall()
 
         times = []
@@ -274,44 +299,11 @@ def stats():
     return jsonify({"ok": True, "schema_version": SCHEMA_VERSION, "agents": by_agent}), 200
 
 
-# Simple dashboard (no JS frameworks) for quick lab checks
 @app.get("/")
 def index():
-    return (
-        """
-<!doctype html>
-<html>
-  <head>
-    <meta charset='utf-8' />
-    <meta name='viewport' content='width=device-width, initial-scale=1' />
-    <title>crystal-beacon-lab</title>
-    <style>
-      body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; max-width: 900px; margin: 40px auto; padding: 0 16px; }
-      code, pre { background: #f6f8fa; padding: 2px 6px; border-radius: 6px; }
-      pre { padding: 12px; overflow-x: auto; }
-      .muted { color: #57606a; }
-    </style>
-  </head>
-  <body>
-    <h1>crystal-beacon-lab</h1>
-    <p class='muted'>Local telemetry collector. Endpoints: <code>/health</code>, <code>/ingest</code>, <code>/events</code>, <code>/stats</code>.</p>
-    <h2>Quick check</h2>
-    <pre id='out'>Loading...</pre>
-    <script>
-      fetch('/stats').then(r => r.json()).then(j => {
-        document.getElementById('out').textContent = JSON.stringify(j, null, 2);
-      }).catch(e => {
-        document.getElementById('out').textContent = String(e);
-      });
-    </script>
-  </body>
-</html>
-""".strip(),
-        200,
-        {"Content-Type": "text/html; charset=utf-8"},
-    )
+    return render_template("index.html")
 
 
 if __name__ == "__main__":
     init_db()
-    app.run(host=HOST, port=PORT, debug=True)
+    app.run(host=HOST, port=PORT, debug=False)

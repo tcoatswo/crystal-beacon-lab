@@ -10,7 +10,7 @@ services:
       # BEACON_KEY: change-me
       # REPLAY_WINDOW_SECONDS: 600
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     volumes:
       - beacon_data:/data
 
