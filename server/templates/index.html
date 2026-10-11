@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Crystal Beacon Lab · Telemetry Explorer</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #090e1a; color: #eaf0fa; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 85% 0%, #183044 0, transparent 33rem), #090e1a; }
+    button { font: inherit; cursor: pointer; }
+    .shell { max-width: 1180px; margin: auto; padding: 30px 24px 70px; }
+    header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 34px; }
+    .eyebrow { color: #67dec6; font-size: 12px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; }
+    h1 { font-size: clamp(28px, 5vw, 43px); letter-spacing: -.05em; line-height: 1.1; margin: 8px 0 7px; }
+    .subtitle, .muted { color: #94a7c3; }
+    .subtitle { margin: 0; font-size: 14px; }
+    .toolbar { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+    .live { color: #81e4bf; font-size: 12px; font-weight: 700; }
+    .live::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 12px currentColor; }
+    .refresh { border: 1px solid #33455f; border-radius: 9px; padding: 9px 13px; background: #17243a; color: #eaf0fa; }
+    .refresh:hover, .agent-button:hover { border-color: #67dec6; }
+    .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 18px; }
+    .card, .panel { border: 1px solid #26354b; border-radius: 15px; background: #111b2c; box-shadow: 0 12px 35px #0002; }
+    .card { padding: 19px 21px; }
+    .label { display: block; color: #9baec8; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    .value { display: block; margin-top: 13px; font-size: 32px; line-height: 1; font-weight: 750; letter-spacing: -.04em; }
+    .card small { display: block; margin-top: 9px; color: #8093ae; }
+    .grid { display: grid; grid-template-columns: minmax(280px, 390px) minmax(0, 1fr); gap: 18px; }
+    .panel { overflow: hidden; }
+    .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid #26354b; padding: 19px 21px; }
+    .panel h2 { margin: 0; font-size: 16px; letter-spacing: -.02em; }
+    .panel-head span { color: #8195b0; font-size: 12px; }
+    .agent-list { padding: 8px; max-height: 490px; overflow: auto; }
+    .agent-button { width: 100%; text-align: left; display: flex; justify-content: space-between; gap: 12px; padding: 15px 13px; border: 1px solid transparent; border-radius: 10px; background: transparent; color: inherit; }
+    .agent-button.active { background: #1b3243; border-color: #347b78; }
+    .agent-button strong { display: block; overflow-wrap: anywhere; font-size: 14px; }
+    .agent-button small { display: block; color: #91a5bf; margin-top: 5px; font-size: 12px; }
+    .count { color: #67dec6; font-weight: 750; }
+    .detail { padding: 20px 22px 25px; min-height: 435px; }
+    .detail-title { font-size: 22px; font-weight: 750; overflow-wrap: anywhere; letter-spacing: -.03em; }
+    .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 21px 0; }
+    .metric { padding: 13px; border: 1px solid #26354b; border-radius: 9px; background: #142137; }
+    .metric b { display: block; margin-top: 7px; font-size: 20px; font-variant-numeric: tabular-nums; }
+    .chart-title { margin: 28px 0 7px; font-size: 13px; font-weight: 700; }
+    .chart-note { font-size: 12px; color: #8599b4; margin: 0 0 7px; }
+    #chart { width: 100%; height: 170px; overflow: visible; }
+    .gridline { stroke: #2e425b; stroke-width: 1; }
+    .trace { fill: none; stroke: #67dec6; stroke-width: 2.5; vector-effect: non-scaling-stroke; }
+    .dot { fill: #67dec6; }
+    .empty { color: #91a5bf; padding: 34px 13px; text-align: center; }
+    .event-panel { margin-top: 18px; }
+    .table-wrap { overflow: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 12px 21px; border-bottom: 1px solid #25344a; white-space: nowrap; }
+    th { color: #91a5bf; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; }
+    td { color: #dce7f5; font-variant-numeric: tabular-nums; }
+    tr:last-child td { border-bottom: 0; }
+    .error { display: none; margin: 0 0 18px; padding: 13px 16px; border: 1px solid #955b64; border-radius: 9px; background: #462931; color: #ffd8df; }
+    footer { color: #7186a2; font-size: 12px; margin-top: 24px; }
+    footer a { color: #9bdbc9; }
+    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } .cards { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 540px) { .shell { padding: 22px 15px 50px; } header { display: block; } .toolbar { margin-top: 18px; } .cards { grid-template-columns: 1fr; } .metrics { grid-template-columns: repeat(2, 1fr); } }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div><div class="eyebrow">Local telemetry lab</div><h1>Beacon explorer</h1><p class="subtitle">Observe timing patterns from your Crystal agents.</p></div>
+      <div class="toolbar"><span class="live" id="status">Connecting</span><button class="refresh" id="refresh" type="button">Refresh data</button></div>
+    </header>
+    <div class="error" id="error" role="alert"></div>
+    <section class="cards" aria-label="Lab summary">
+      <div class="card"><span class="label">Agents</span><span class="value" id="agent-count">—</span><small>Unique agent IDs</small></div>
+      <div class="card"><span class="label">Events</span><span class="value" id="event-count">—</span><small>Across all agents</small></div>
+      <div class="card"><span class="label">Latest signal</span><span class="value" id="latest">—</span><small id="latest-time">No events yet</small></div>
+    </section>
+    <section class="grid" aria-label="Agent analysis">
+      <div class="panel"><div class="panel-head"><h2>Agents</h2><span>Select to inspect</span></div><div class="agent-list" id="agents"><p class="empty">Loading agents…</p></div></div>
+      <div class="panel"><div class="panel-head"><h2>Timing analysis</h2><span>Most recent 2,000 events</span></div><div class="detail" id="detail"><p class="empty">Choose an agent to view its timing.</p></div></div>
+    </section>
+    <section class="panel event-panel"><div class="panel-head"><h2>Recent events</h2><span id="event-label">Selected agent</span></div><div class="table-wrap"><table><thead><tr><th>Received</th><th>Agent</th><th>Nonce</th><th>Schema</th></tr></thead><tbody id="events"><tr><td colspan="4" class="empty">No events yet.</td></tr></tbody></table></div></section>
+    <footer>Local collector · <a href="/health">Health</a> · <a href="/stats">Stats JSON</a> · <a href="/events">Events JSON</a></footer>
+  </main>
+  <script>
+    const byId = id => document.getElementById(id);
+    let selected = null;
+    let agents = [];
+    let requestId = 0;
+
+    function number(value) { return new Intl.NumberFormat().format(value); }
+    function seconds(value) { return value == null ? '—' : `${value.toFixed(1)}s`; }
+    function stamp(value) { return value ? new Date(value).toLocaleString() : '—'; }
+    function clear(node) { node.replaceChildren(); }
+    function textElement(tag, value, className) {
+      const node = document.createElement(tag);
+      node.textContent = value;
+      if (className) node.className = className;
+      return node;
+    }
+    function metric(label, value) {
+      const node = textElement('div', '', 'metric');
+      node.append(textElement('span', label, 'label'), textElement('b', value));
+      return node;
+    }
+    function renderChart(events) {
+      const times = events.map(e => new Date(e.received_at).getTime()).filter(Number.isFinite).sort((a, b) => a - b);
+      const deltas = times.slice(1).map((t, i) => (t - times[i]) / 1000).slice(-50);
+      const container = byId('detail');
+      container.append(textElement('p', 'Recent inter-arrival intervals', 'chart-title'));
+      container.append(textElement('p', 'Each point is the time between two received events. Up to 50 intervals are shown.', 'chart-note'));
+      if (!deltas.length) { container.append(textElement('p', 'At least two events are needed for a timing chart.', 'muted')); return; }
+      const ns = 'http://www.w3.org/2000/svg';
+      const svg = document.createElementNS(ns, 'svg');
+      svg.setAttribute('id', 'chart'); svg.setAttribute('viewBox', '0 0 600 170');
+      svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', 'Recent inter-arrival intervals in seconds');
+      for (const y of [20, 85, 150]) {
+        const line = document.createElementNS(ns, 'line');
+        line.setAttribute('x1', '0'); line.setAttribute('x2', '600'); line.setAttribute('y1', y); line.setAttribute('y2', y);
+        line.setAttribute('class', 'gridline'); svg.append(line);
+      }
+      const max = Math.max(...deltas, 1);
+      const points = deltas.map((d, i) => `${deltas.length === 1 ? 300 : i * 600 / (deltas.length - 1)},${150 - d * 130 / max}`);
+      const line = document.createElementNS(ns, 'polyline');
+      line.setAttribute('points', points.join(' ')); line.setAttribute('class', 'trace'); svg.append(line);
+      if (deltas.length === 1) {
+        const dot = document.createElementNS(ns, 'circle'); dot.setAttribute('cx', '300'); dot.setAttribute('cy', 150 - deltas[0] * 130 / max); dot.setAttribute('r', '4'); dot.setAttribute('class', 'dot'); svg.append(dot);
+      }
+      container.append(svg);
+    }
+    async function selectAgent(id) {
+      selected = id;
+      const current = ++requestId;
+      renderAgents();
+      const agent = agents.find(a => a.agent_id === id);
+      const detail = byId('detail'); clear(detail);
+      if (!agent) { detail.append(textElement('p', 'No agent selected.', 'empty')); return; }
+      detail.append(textElement('div', id, 'detail-title'));
+      const stats = agent.interarrival;
+      const metrics = textElement('div', '', 'metrics');
+      metrics.append(metric('Mean interval', seconds(stats.mean_s)), metric('Median', seconds(stats.median_s)), metric('Min / max', `${seconds(stats.min_s)} / ${seconds(stats.max_s)}`), metric('Variation', stats.cv == null ? '—' : `${(stats.cv * 100).toFixed(1)}%`));
+      detail.append(metrics);
+      byId('event-label').textContent = id;
+      try {
+        const response = await fetch(`/events?agent_id=${encodeURIComponent(id)}&limit=100`, {cache: 'no-store'});
+        if (!response.ok) throw new Error(`Events request failed (${response.status})`);
+        const result = await response.json();
+        if (current !== requestId) return;
+        renderChart(result.events);
+        const tbody = byId('events'); clear(tbody);
+        if (!result.events.length) { const row = document.createElement('tr'); const cell = textElement('td', 'No events yet.', 'empty'); cell.colSpan = 4; row.append(cell); tbody.append(row); }
+        for (const event of result.events.slice(0, 20)) {
+          const row = document.createElement('tr');
+          for (const value of [stamp(event.received_at), event.agent_id, event.nonce || '—', event.schema_version]) row.append(textElement('td', String(value)));
+          tbody.append(row);
+        }
+      } catch (error) { if (current === requestId) showError(error.message); }
+    }
+    function renderAgents() {
+      const list = byId('agents'); clear(list);
+      if (!agents.length) { list.append(textElement('p', 'No agents yet. Start the Crystal agent to see telemetry here.', 'empty')); return; }
+      for (const agent of agents) {
+        const button = textElement('button', '', `agent-button${agent.agent_id === selected ? ' active' : ''}`);
+        button.type = 'button'; button.setAttribute('aria-pressed', String(agent.agent_id === selected));
+        const info = document.createElement('span'); info.append(textElement('strong', agent.agent_id), textElement('small', `Last seen ${stamp(agent.last_received_at)}`));
+        button.append(info, textElement('span', number(agent.events), 'count'));
+        button.addEventListener('click', () => selectAgent(agent.agent_id)); list.append(button);
+      }
+    }
+    function showError(message) { const error = byId('error'); error.textContent = message; error.style.display = 'block'; byId('status').textContent = 'Connection error'; }
+    async function refresh() {
+      byId('error').style.display = 'none';
+      byId('status').textContent = 'Refreshing';
+      try {
+        const response = await fetch('/stats', {cache: 'no-store'});
+        if (!response.ok) throw new Error(`Stats request failed (${response.status})`);
+        const result = await response.json();
+        agents = result.agents;
+        byId('agent-count').textContent = number(agents.length);
+        byId('event-count').textContent = number(agents.reduce((sum, a) => sum + a.events, 0));
+        const latest = agents.map(a => a.last_received_at).filter(Boolean).sort().at(-1);
+        byId('latest').textContent = latest ? new Date(latest).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : '—';
+        byId('latest-time').textContent = latest ? stamp(latest) : 'No events yet';
+        byId('status').textContent = 'Collector online';
+        await selectAgent(agents.some(a => a.agent_id === selected) ? selected : agents[0]?.agent_id);
+      } catch (error) { showError(error.message); }
+    }
+    byId('refresh').addEventListener('click', refresh);
+    refresh();
+    setInterval(refresh, 15000);
+  </script>
+</body>
+</html>
