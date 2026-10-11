@@ -1,6 +1,7 @@
 name: ci
 on:
   push:
+    branches: [main]
   pull_request:
 
 permissions:
@@ -27,7 +28,7 @@ jobs:
           pip install -r server/requirements-dev.txt
       - name: Test
         run: |
-          pytest -q
+          python -m pytest -q
   crystal:
     runs-on: ubuntu-latest
     steps:
